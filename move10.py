@@ -16,8 +16,15 @@ logging.basicConfig(filename=logfile, level=logging.INFO,
 
 # --- Função principal de cópia ---
 def copiar_arquivos(origem, destino, dry_run, log_widget):
+    log_widget.configure(state="normal")
+    log_widget.delete(1.0, END)
+
     if not origem or not destino:
-        messagebox.showerror("Erro", "Por favor, selecione a pasta de origem/pasta de destino.")
+        messagebox.showerror("Erro", "Por favor, selecione a pasta de origem e a pasta de destino.")
+        return
+
+    if os.path.abspath(origem) == os.path.abspath(destino):
+        messagebox.showerror("Erro", "A pasta de origem e destino não podem ser iguais.")
         return
 
     copiados = 0
@@ -47,9 +54,12 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
         caminho_destino = os.path.join(destino, arquivo)
 
         try:
-            if not os.access(caminho_origem, os.R_OK):
+            try:
+                with open(caminho_origem, 'rb'):
+                    pass
+            except Exception as e:
                 ignorados += 1
-                logging.warning(f"Sem permissão de leitura: {arquivo}")
+                logging.warning(f"Arquivo não pode ser lido: {arquivo}. Erro: {e}")
                 continue
 
             if os.path.exists(caminho_destino):
@@ -59,8 +69,11 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
                     continue
                 else:
                     base, ext = os.path.splitext(arquivo)
-                    novo_nome = f"{base}_{uuid.uuid4().hex[:6]}{ext}"
-                    caminho_destino = os.path.join(destino, novo_nome)
+                    while True:
+                        novo_nome = f"{base}_{uuid.uuid4().hex[:6]}{ext}"
+                        caminho_destino = os.path.join(destino, novo_nome)
+                        if not os.path.exists(caminho_destino):
+                            break
                     logging.warning(f'Arquivo existente: {arquivo}. Renomeado para: {novo_nome}')
 
             if dry_run:
@@ -85,6 +98,7 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
     log_widget.insert(END, resumo)
     log_widget.see(END)
     logging.info(resumo)
+    log_widget.configure(state="disabled")
 
 # --- Função de seleção de pasta ---
 def selecionar_pasta(entry_widget):
@@ -96,7 +110,7 @@ def selecionar_pasta(entry_widget):
 # --- Interface Tkinter ---
 root = Tk()
 root.title("CC")
-root.geometry("600x400")
+root.geometry("600x500")
 
 Label(root, text="Pasta de Origem:").pack()
 entrada_origem = Entry(root, width=50)
@@ -118,7 +132,7 @@ Label(root, text="Log de Execução:").pack()
 scrollbar = Scrollbar(root)
 scrollbar.pack(side=RIGHT, fill=Y)
 
-log_text = Text(root, height=10, width=70, yscrollcommand=scrollbar.set)
+log_text = Text(root, height=10, width=70, yscrollcommand=scrollbar.set, wrap="none")
 log_text.pack()
 scrollbar.config(command=log_text.yview)
 

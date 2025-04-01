@@ -3,7 +3,7 @@ import shutil
 import logging
 import uuid
 from datetime import datetime
-from tkinter import Tk, Label, Button, Entry, Checkbutton, IntVar, Text, filedialog, END, Scrollbar, RIGHT, Y, messagebox
+from tkinter import Tk, Label, Button, Entry, Checkbutton, IntVar, Text, filedialog, END, Scrollbar, RIGHT, Y, messagebox, DISABLED, NORMAL
 
 # --- Configurações fixas ---
 extensoes_validas = ('.txt', '.sql', '.pdf', '.rtf')
@@ -16,8 +16,17 @@ logging.basicConfig(filename=logfile, level=logging.INFO,
 
 # --- Função principal de cópia ---
 def copiar_arquivos(origem, destino, dry_run, log_widget):
+    log_widget.config(state=NORMAL)
+    log_widget.delete(1.0, END)
+
     if not origem or not destino:
-        messagebox.showerror("Erro", "Por favor, selecione a pasta de origem/pasta de destino.")
+        messagebox.showerror("Erro", "Por favor, selecione a pasta de origem e a pasta de destino.")
+        log_widget.config(state=DISABLED)
+        return
+
+    if os.path.abspath(origem) == os.path.abspath(destino):
+        messagebox.showerror("Erro", "A pasta de origem e destino não podem ser iguais.")
+        log_widget.config(state=DISABLED)
         return
 
     copiados = 0
@@ -28,6 +37,7 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
         msg = f"[ERRO] Pasta de origem não encontrada: {origem}\n"
         log_widget.insert(END, msg)
         logging.error(f'Pasta de origem não encontrada: {origem}')
+        log_widget.config(state=DISABLED)
         return
 
     try:
@@ -36,6 +46,7 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
         msg = f"[ERRO] Ao criar pasta de destino: {e}\n"
         log_widget.insert(END, msg)
         logging.error(f'Erro ao criar pasta destino: {e}')
+        log_widget.config(state=DISABLED)
         return
 
     arquivos = os.listdir(origem)
@@ -47,9 +58,12 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
         caminho_destino = os.path.join(destino, arquivo)
 
         try:
-            if not os.access(caminho_origem, os.R_OK):
+            try:
+                with open(caminho_origem, 'rb'):
+                    pass
+            except Exception as e:
                 ignorados += 1
-                logging.warning(f"Sem permissão de leitura: {arquivo}")
+                logging.warning(f"Arquivo não pode ser lido: {arquivo}. Erro: {e}")
                 continue
 
             if os.path.exists(caminho_destino):
@@ -59,8 +73,11 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
                     continue
                 else:
                     base, ext = os.path.splitext(arquivo)
-                    novo_nome = f"{base}_{uuid.uuid4().hex[:6]}{ext}"
-                    caminho_destino = os.path.join(destino, novo_nome)
+                    while True:
+                        novo_nome = f"{base}_{uuid.uuid4().hex[:6]}{ext}"
+                        caminho_destino = os.path.join(destino, novo_nome)
+                        if not os.path.exists(caminho_destino):
+                            break
                     logging.warning(f'Arquivo existente: {arquivo}. Renomeado para: {novo_nome}')
 
             if dry_run:
@@ -72,18 +89,24 @@ def copiar_arquivos(origem, destino, dry_run, log_widget):
                 msg = f"[OK] Arquivo copiado: {arquivo}\n"
                 logging.info(f"Arquivo copiado: {arquivo}")
 
+            log_widget.config(state=NORMAL)
             log_widget.insert(END, msg)
             log_widget.see(END)
+            log_widget.config(state=DISABLED)
 
         except Exception as e:
             msg = f"[ERRO] Falha ao copiar {arquivo}: {e}\n"
+            log_widget.config(state=NORMAL)
             log_widget.insert(END, msg)
+            log_widget.config(state=DISABLED)
             logging.error(f"Erro ao copiar {arquivo}: {e}")
             erros += 1
 
     resumo = f"\nResumo da exportação ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}):\n- Arquivos copiados: {copiados}\n- Ignorados (duplicados ou sem permissão): {ignorados}\n- Erros: {erros}\n"
+    log_widget.config(state=NORMAL)
     log_widget.insert(END, resumo)
     log_widget.see(END)
+    log_widget.config(state=DISABLED)
     logging.info(resumo)
 
 # --- Função de seleção de pasta ---
@@ -96,7 +119,7 @@ def selecionar_pasta(entry_widget):
 # --- Interface Tkinter ---
 root = Tk()
 root.title("CC")
-root.geometry("600x400")
+root.geometry("600x500")
 
 Label(root, text="Pasta de Origem:").pack()
 entrada_origem = Entry(root, width=50)
@@ -120,6 +143,7 @@ scrollbar.pack(side=RIGHT, fill=Y)
 
 log_text = Text(root, height=10, width=70, yscrollcommand=scrollbar.set)
 log_text.pack()
+log_text.config(state=DISABLED)
 scrollbar.config(command=log_text.yview)
 
 root.mainloop()
